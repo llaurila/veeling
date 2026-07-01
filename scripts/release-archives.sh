@@ -7,6 +7,7 @@ OUTPUT_DIR="./artifacts/releases"
 NUPKG_DIR="./artifacts/nupkg"
 TAG=""
 VERSION=""
+ALLOW_MISSING_TAG="false"
 SIGNING_MODE="optional"
 PROVENANCE_MODE="optional"
 SBOM_MODE="optional"
@@ -23,6 +24,7 @@ Build Veeling release archives for one or more RIDs and emit SHA256 checksums.
 
 Options:
   --tag <vX.Y.Z>          Annotated SemVer release tag to build from (required).
+  --allow-missing-tag     Allow missing local tag object for dry-run intent validation.
   --output <path>         Output directory (default: ./artifacts/releases).
   --nupkg-output <path>   NuGet package output directory (default: ./artifacts/nupkg).
   --signing-mode <mode>   Signing policy: off|optional|required (default: optional).
@@ -53,6 +55,10 @@ while [[ $# -gt 0 ]]; do
     --output)
       OUTPUT_DIR="$2"
       shift 2
+      ;;
+    --allow-missing-tag)
+      ALLOW_MISSING_TAG="true"
+      shift 1
       ;;
     --nupkg-output)
       NUPKG_DIR="$2"
@@ -218,7 +224,11 @@ if [[ -z "$TAG" ]]; then
   exit 2
 fi
 
-bash "scripts/validate-release-tag.sh" --tag "$TAG" --project "$PROJECT_PATH"
+validate_tag_args=(--tag "$TAG" --project "$PROJECT_PATH")
+if [[ "$ALLOW_MISSING_TAG" == "true" ]]; then
+  validate_tag_args+=(--allow-missing-tag)
+fi
+bash "scripts/validate-release-tag.sh" "${validate_tag_args[@]}"
 VERSION="${TAG#v}"
 
 if [[ ${#RIDS[@]} -eq 0 ]]; then

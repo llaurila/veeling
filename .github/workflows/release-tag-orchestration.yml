@@ -95,8 +95,15 @@ jobs:
           VEELING_GPG_KEY_ID: ${{ vars.VEELING_GPG_KEY_ID }}
           VEELING_REPOSITORY_URL: ${{ vars.VEELING_REPOSITORY_URL }}
         run: |
+          set -euo pipefail
+          allow_missing_tag_arg=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ needs.context.outputs.dry_run }}" == "true" ]]; then
+            allow_missing_tag_arg="--allow-missing-tag"
+          fi
+
           bash scripts/release-archives.sh \
             --tag "${{ needs.context.outputs.tag }}" \
+            ${allow_missing_tag_arg} \
             --signing-mode optional \
             --provenance-mode required \
             --sbom-mode optional \
@@ -128,8 +135,15 @@ jobs:
           VEELING_GPG_KEY_ID: ${{ vars.VEELING_GPG_KEY_ID }}
           VEELING_REPOSITORY_URL: ${{ vars.VEELING_REPOSITORY_URL }}
         run: |
+          set -euo pipefail
+          allow_missing_tag_arg=""
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ needs.context.outputs.dry_run }}" == "true" ]]; then
+            allow_missing_tag_arg="--allow-missing-tag"
+          fi
+
           bash scripts/release-archives.sh \
             --tag "${{ needs.context.outputs.tag }}" \
+            ${allow_missing_tag_arg} \
             --output ./artifacts/releases \
             --nupkg-output ./artifacts/nupkg \
             --signing-mode optional \
