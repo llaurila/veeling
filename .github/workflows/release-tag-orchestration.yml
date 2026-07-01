@@ -219,11 +219,11 @@ jobs:
 
           dotnet tool install --global veeling --add-source "$source_dir" --version "$version" --ignore-failed-sources
           installed_version="$(veeling --version)"
-          [[ "$installed_version" == "$version" ]] || { echo "Expected version $version, got $installed_version" >&2; exit 1; }
+          [[ "$installed_version" == "$version" || "$installed_version" == "$version"+* ]] || { echo "Expected version $version (optionally with build metadata), got $installed_version" >&2; exit 1; }
 
           dotnet tool update --global veeling --add-source "$source_dir" --version "$version" --ignore-failed-sources
           updated_version="$(veeling --version)"
-          [[ "$updated_version" == "$version" ]] || { echo "Expected updated version $version, got $updated_version" >&2; exit 1; }
+          [[ "$updated_version" == "$version" || "$updated_version" == "$version"+* ]] || { echo "Expected updated version $version (optionally with build metadata), got $updated_version" >&2; exit 1; }
 
   smoke-archive-linux:
     name: Smoke (archive path linux-x64 install/update)
