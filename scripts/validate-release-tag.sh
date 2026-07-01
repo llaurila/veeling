@@ -77,11 +77,26 @@ fi
 
 if [[ "$tag_exists" == "true" ]]; then
   object_type="$(git for-each-ref "refs/tags/$TAG" --format='%(objecttype)')"
+  tag_commit=""
   if [[ "$object_type" != "tag" ]]; then
-    fail "Tag '$TAG' is lightweight. Use annotated tags: git tag -a $TAG -m 'Release $TAG'"
+    # In some CI checkouts, refs/tags/$TAG may be materialized as a commit ref
+    # even when the remote tag is annotated. Verify against origin before failing.
+    remote_tag_oid="$(git ls-remote --tags origin "refs/tags/$TAG" | awk 'NR==1 {print $1}')"
+    remote_peeled_oid="$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk 'NR==1 {print $1}')"
+
+    if [[ -z "$remote_tag_oid" ]]; then
+      fail "Tag '$TAG' is missing on origin. Fetch tags or create it first."
+    fi
+
+    if [[ -z "$remote_peeled_oid" ]]; then
+      fail "Tag '$TAG' is lightweight. Use annotated tags: git tag -a $TAG -m 'Release $TAG'"
+    fi
+
+    tag_commit="$remote_peeled_oid"
+  else
+    tag_commit="$(git rev-list -n 1 "$TAG")"
   fi
 
-  tag_commit="$(git rev-list -n 1 "$TAG")"
   head_commit="$(git rev-parse HEAD)"
   if [[ "$tag_commit" != "$head_commit" ]]; then
     fail "Tag '$TAG' points to $tag_commit, but HEAD is $head_commit. Tag the release commit."
