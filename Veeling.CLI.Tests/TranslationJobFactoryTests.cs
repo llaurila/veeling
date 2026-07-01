@@ -16,8 +16,10 @@ public class TranslationJobFactoryTests
             new GlossaryLoader(),
             new ProviderAuthFailureClassifier());
 
+        TranslationJob job = factory.Create(project, "Schema1", new Language("en"), new Language("fi"));
+
         ProviderAuthenticationException ex = Assert.Throws<ProviderAuthenticationException>(
-            () => factory.Create(project, "Schema1", new Language("en"), new Language("fi"))
+            job.Execute
         );
 
         Assert.Equal(4, ex.ExitCode);
@@ -34,8 +36,10 @@ public class TranslationJobFactoryTests
             new GlossaryLoader(),
             new ProviderAuthFailureClassifier());
 
+        TranslationJob job = factory.Create(project, "Schema1", new Language("en"), new Language("fi"));
+
         ProviderExecutionException ex = Assert.Throws<ProviderExecutionException>(
-            () => factory.Create(project, "Schema1", new Language("en"), new Language("fi"))
+            job.Execute
         );
 
         Assert.Equal(3, ex.ExitCode);
@@ -46,7 +50,23 @@ public class TranslationJobFactoryTests
     {
         public IProjectDataSession Open(Project ignored)
         {
-            return new MockProjectDataSession(project);
+            return new MockProjectDataSession(project)
+            {
+                OnGet = recordFilter =>
+                {
+                    if (recordFilter.ToString() == "Schema1.*:en")
+                    {
+                        return
+                        [
+                            new DataRetrieveResult(
+                                new DataModel { Name = "Field1", Value = "Hello" },
+                                new RecordLocator("Schema1", "Field1", "en"))
+                        ];
+                    }
+
+                    return [];
+                }
+            };
         }
     }
 

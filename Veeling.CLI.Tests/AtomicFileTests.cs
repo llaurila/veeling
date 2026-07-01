@@ -60,14 +60,14 @@ public class AtomicFileTests : IDisposable
         FileInfo target = new(Path.Combine(tempDirectory.FullName, "sample.txt"));
         File.WriteAllText(target.FullName, "old");
 
-        using (FileStream lockHandle = new(
-            target.FullName,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.None
-        ))
+        try
         {
+            AtomicFile.ReplaceOperationOverride = (_, _) => throw new IOException("Simulated replace failure.");
             Assert.ThrowsAny<IOException>(() => AtomicFile.WriteAllText(target, "new"));
+        }
+        finally
+        {
+            AtomicFile.ReplaceOperationOverride = null;
         }
 
         string[] tempFiles = Directory

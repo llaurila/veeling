@@ -20,7 +20,7 @@ public class TranslationJob
 
     private readonly Lazy<VSchema> schema;
     private readonly IProjectDataSession session;
-    private readonly ILLMProvider llmProvider;
+    private readonly Lazy<ILLMProvider> llmProvider;
     private readonly Language from;
     private readonly Language to;
     private readonly IProviderAuthFailureClassifier authFailureClassifier;
@@ -31,7 +31,7 @@ public class TranslationJob
 
     public TranslationJob(
         IProjectDataSession session,
-        ILLMProvider llmProvider,
+        Func<ILLMProvider> llmProviderFactory,
         Project project,
         string schemaName,
         Language from,
@@ -40,7 +40,7 @@ public class TranslationJob
         GlossaryModel? glossary = null)
     {
         this.session = session;
-        this.llmProvider = llmProvider;
+        this.llmProvider = new Lazy<ILLMProvider>(llmProviderFactory);
         this.from = from;
         this.to = to;
         this.authFailureClassifier = authFailureClassifier;
@@ -51,6 +51,27 @@ public class TranslationJob
             return project.GetSchema(schemaName)
                 ?? throw new InvalidOperationException($"Schema '{schemaName}' not found in project.");
         });
+    }
+
+    public TranslationJob(
+        IProjectDataSession session,
+        ILLMProvider llmProvider,
+        Project project,
+        string schemaName,
+        Language from,
+        Language to,
+        IProviderAuthFailureClassifier authFailureClassifier,
+        GlossaryModel? glossary = null)
+        : this(
+            session,
+            () => llmProvider,
+            project,
+            schemaName,
+            from,
+            to,
+            authFailureClassifier,
+            glossary)
+    {
     }
 
     public bool DryRun { get; set; }
@@ -182,7 +203,7 @@ public class TranslationJob
     {
         try
         {
-            return llmProvider.Complete(messages);
+            return llmProvider.Value.Complete(messages);
         }
         catch (CommandExecutionException)
         {

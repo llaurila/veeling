@@ -2,6 +2,8 @@ namespace Veeling.CLI;
 
 public static class AtomicFile
 {
+    internal static Action<string, string>? ReplaceOperationOverride { get; set; }
+
     /// <summary>
     /// Writes content atomically to the destination file.
     ///
@@ -34,7 +36,14 @@ public static class AtomicFile
 
             if (File.Exists(file.FullName))
             {
-                File.Replace(tempFilePath, file.FullName, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                if (ReplaceOperationOverride is not null)
+                {
+                    ReplaceOperationOverride(tempFilePath, file.FullName);
+                }
+                else
+                {
+                    File.Replace(tempFilePath, file.FullName, destinationBackupFileName: null, ignoreMetadataErrors: true);
+                }
             }
             else
             {

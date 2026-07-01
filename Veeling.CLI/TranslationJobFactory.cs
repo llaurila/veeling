@@ -12,11 +12,23 @@ public class TranslationJobFactory(
 {
     public TranslationJob Create(Project project, string schemaName, Language sourceLang, Language targetLang)
     {
-        ILLMProvider llmProvider;
+        return new TranslationJob(
+            sessionFactory.Open(project),
+            () => CreateProvider(project.Directory, schemaName, sourceLang, targetLang),
+            project,
+            schemaName,
+            sourceLang,
+            targetLang,
+            authFailureClassifier,
+            glossaryLoader.Load(project, targetLang)
+        );
+    }
 
+    private ILLMProvider CreateProvider(DirectoryInfo projectDirectory, string schemaName, Language sourceLang, Language targetLang)
+    {
         try
         {
-            llmProvider = llmProviderFactory.Create(project.Directory);
+            return llmProviderFactory.Create(projectDirectory);
         }
         catch (CommandExecutionException)
         {
@@ -34,16 +46,5 @@ public class TranslationJobFactory(
 
             throw new ProviderExecutionException(message, ex);
         }
-
-        return new TranslationJob(
-            sessionFactory.Open(project),
-            llmProvider,
-            project,
-            schemaName,
-            sourceLang,
-            targetLang,
-            authFailureClassifier,
-            glossaryLoader.Load(project, targetLang)
-        );
     }
 }
