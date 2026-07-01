@@ -257,14 +257,14 @@ jobs:
           executable_path="${current_dir}/Veeling.CLI"
 
           installed_version="$("${executable_path}" --version)"
-          [[ "$installed_version" == "$version" ]] || { echo "Expected version $version, got $installed_version" >&2; exit 1; }
+          [[ "$installed_version" == "$version" || "$installed_version" == "$version"+* ]] || { echo "Expected version $version (optionally with build metadata), got $installed_version" >&2; exit 1; }
 
           rm -rf "$current_dir"
           tar -xzf "$archive" -C "$root"
           mv "$root/veeling-${version}-linux-x64" "$current_dir"
 
           updated_version="$("${executable_path}" --version)"
-          [[ "$updated_version" == "$version" ]] || { echo "Expected updated version $version, got $updated_version" >&2; exit 1; }
+          [[ "$updated_version" == "$version" || "$updated_version" == "$version"+* ]] || { echo "Expected updated version $version (optionally with build metadata), got $updated_version" >&2; exit 1; }
 
   smoke-archive-windows:
     name: Smoke (archive path win-x64 install/update)
@@ -295,14 +295,14 @@ jobs:
           Move-Item -Path (Join-Path $extractRoot "veeling-$version-win-x64") -Destination $current -Force
 
           $installed = (& (Join-Path $current "veeling.exe") --version).Trim()
-          if ($installed -ne $version) { throw "Expected version $version, got $installed" }
+          if (-not ($installed -eq $version -or $installed.StartsWith("$version+"))) { throw "Expected version $version (optionally with build metadata), got $installed" }
 
           Remove-Item $current -Recurse -Force
           Expand-Archive -Path $archive -DestinationPath $extractRoot -Force
           Move-Item -Path (Join-Path $extractRoot "veeling-$version-win-x64") -Destination $current -Force
 
           $updated = (& (Join-Path $current "veeling.exe") --version).Trim()
-          if ($updated -ne $version) { throw "Expected updated version $version, got $updated" }
+          if (-not ($updated -eq $version -or $updated.StartsWith("$version+"))) { throw "Expected updated version $version (optionally with build metadata), got $updated" }
 
   publish-github-release:
     name: Publish GitHub release
