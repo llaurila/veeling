@@ -1,0 +1,22 @@
+﻿The section to be translated is: ${section_name}
+
+Description:
+---
+${section_description}
+---
+
+Fields:
+${fields_list}
+
+Glossary rules:
+---
+${glossary_rules}
+---
+
+The ${source_language} JSON to translate is:
+
+---
+${source_json}
+---
+
+Translate this into ${target_language}.

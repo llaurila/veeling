@@ -1,0 +1,54 @@
+name: CI Matrix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - development
+      - feat/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-matrix:
+    name: build-test (${{ matrix.os }} | ${{ matrix.rid }} | .NET ${{ matrix.dotnet }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            dotnet: 10.0.x
+          - os: windows-latest
+            rid: win-x64
+            dotnet: 10.0.x
+          - os: macos-13
+            rid: osx-x64
+            dotnet: 10.0.x
+          - os: macos-14
+            rid: osx-arm64
+            dotnet: 10.0.x
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet }}
+
+      - name: Restore
+        run: dotnet restore Veeling.slnx -r ${{ matrix.rid }}
+
+      - name: Build
+        run: dotnet build Veeling.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Veeling.slnx --configuration Release --no-build --verbosity normal
+
+      - name: Runtime publish smoke
+        run: dotnet publish Veeling.CLI/Veeling.CLI.csproj --configuration Release --runtime ${{ matrix.rid }} --self-contained false --output artifacts/ci/publish/${{ matrix.rid }}

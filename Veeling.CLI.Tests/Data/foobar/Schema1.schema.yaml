@@ -1,0 +1,6 @@
+name: Schema1
+description: Sample schema.
+model:
+- name: Field1
+  description: <describe the field here>
+  multiline: 

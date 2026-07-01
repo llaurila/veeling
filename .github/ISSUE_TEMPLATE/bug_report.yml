@@ -1,0 +1,72 @@
+name: Bug report
+description: Report a reproducible problem in Veeling.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug.
+        Please provide enough detail for us to reproduce the issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: Veeling version
+      description: Output of `veeling --version`.
+      placeholder: 0.x.y
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, shell, and .NET runtime/SDK details.
+      placeholder: Windows 11, PowerShell 7.4, .NET SDK 10.x
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact commands and inputs.
+      placeholder: |
+        1. Run `veeling ...`
+        2. Run `veeling ...`
+        3. Observe error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Paste sanitized output. Do not include API keys or secrets.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues before creating this report.
+          required: true
+        - label: I removed secrets and private data from logs/output.
+          required: true

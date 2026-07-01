@@ -1,0 +1,10 @@
+name: foobar
+description: Foobar
+master_language: fr
+languages:
+- en
+- fr
+style:
+  tone: Neutral
+  formality: Informal
+  audience: general

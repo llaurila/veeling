@@ -1,0 +1,10 @@
+projects/
+.vs/
+bin
+obj
+*.user
+/Veeling.CLI/Properties/launchSettings.json
+Veeling.CLI/nupkg/
+.feynman/vector_db/
+.opencode/package-lock.json
+/artifacts/
