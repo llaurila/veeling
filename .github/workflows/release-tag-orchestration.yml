@@ -294,14 +294,14 @@ jobs:
           Expand-Archive -Path $archive -DestinationPath $extractRoot -Force
           Move-Item -Path (Join-Path $extractRoot "veeling-$version-win-x64") -Destination $current -Force
 
-          $installed = (& (Join-Path $current "veeling.exe") --version).Trim()
+          $installed = (& (Join-Path $current "Veeling.CLI.exe") --version).Trim()
           if (-not ($installed -eq $version -or $installed.StartsWith("$version+"))) { throw "Expected version $version (optionally with build metadata), got $installed" }
 
           Remove-Item $current -Recurse -Force
           Expand-Archive -Path $archive -DestinationPath $extractRoot -Force
           Move-Item -Path (Join-Path $extractRoot "veeling-$version-win-x64") -Destination $current -Force
 
-          $updated = (& (Join-Path $current "veeling.exe") --version).Trim()
+          $updated = (& (Join-Path $current "Veeling.CLI.exe") --version).Trim()
           if (-not ($updated -eq $version -or $updated.StartsWith("$version+"))) { throw "Expected updated version $version (optionally with build metadata), got $updated" }
 
   publish-github-release:
