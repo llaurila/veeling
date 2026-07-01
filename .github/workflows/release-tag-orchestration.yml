@@ -212,7 +212,7 @@ jobs:
           export HOME="${RUNNER_TEMP}/veeling-smoke-home"
           export DOTNET_CLI_HOME="${RUNNER_TEMP}/veeling-smoke-dotnet-home"
           export NUGET_PACKAGES="${RUNNER_TEMP}/veeling-smoke-nuget-packages"
-          export PATH="${HOME}/.dotnet/tools:${PATH}"
+          export PATH="${DOTNET_CLI_HOME}/.dotnet/tools:${PATH}"
 
           rm -rf "$HOME" "$DOTNET_CLI_HOME" "$NUGET_PACKAGES"
           mkdir -p "$HOME" "$DOTNET_CLI_HOME" "$NUGET_PACKAGES"
