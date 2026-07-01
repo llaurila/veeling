@@ -4,17 +4,18 @@ set -euo pipefail
 
 TAG=""
 PROJECT_PATH="Veeling.CLI/Veeling.CLI.csproj"
+ALLOW_MISSING_TAG="false"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/validate-release-tag.sh --tag <vX.Y.Z> [--project <path>]
+Usage: scripts/validate-release-tag.sh --tag <vX.Y.Z> [--project <path>] [--allow-missing-tag]
 
 Validate that a release tag is SemVer-compliant, annotated, and aligned with
 the canonical MSBuild version.
 
 Checks:
   1) Tag name matches ^vMAJOR.MINOR.PATCH$.
-  2) Tag exists locally.
+  2) Tag exists locally (unless --allow-missing-tag is set).
   3) Tag is annotated (not lightweight).
   4) Tag points to current HEAD.
   5) Tag version matches MSBuild Version from Directory.Build.props.
@@ -41,6 +42,10 @@ while [[ $# -gt 0 ]]; do
       PROJECT_PATH="${2:-}"
       shift 2
       ;;
+    --allow-missing-tag)
+      ALLOW_MISSING_TAG="true"
+      shift
+      ;;
     --help)
       usage
       exit 0
@@ -63,19 +68,24 @@ if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
   fail "Tag '$TAG' is not SemVer-compliant. Expected format: vX.Y.Z"
 fi
 
-if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+tag_exists="false"
+if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+  tag_exists="true"
+elif [[ "$ALLOW_MISSING_TAG" != "true" ]]; then
   fail "Tag '$TAG' does not exist locally. Fetch tags or create it first."
 fi
 
-object_type="$(git for-each-ref "refs/tags/$TAG" --format='%(objecttype)')"
-if [[ "$object_type" != "tag" ]]; then
-  fail "Tag '$TAG' is lightweight. Use annotated tags: git tag -a $TAG -m 'Release $TAG'"
-fi
+if [[ "$tag_exists" == "true" ]]; then
+  object_type="$(git for-each-ref "refs/tags/$TAG" --format='%(objecttype)')"
+  if [[ "$object_type" != "tag" ]]; then
+    fail "Tag '$TAG' is lightweight. Use annotated tags: git tag -a $TAG -m 'Release $TAG'"
+  fi
 
-tag_commit="$(git rev-list -n 1 "$TAG")"
-head_commit="$(git rev-parse HEAD)"
-if [[ "$tag_commit" != "$head_commit" ]]; then
-  fail "Tag '$TAG' points to $tag_commit, but HEAD is $head_commit. Tag the release commit."
+  tag_commit="$(git rev-list -n 1 "$TAG")"
+  head_commit="$(git rev-parse HEAD)"
+  if [[ "$tag_commit" != "$head_commit" ]]; then
+    fail "Tag '$TAG' points to $tag_commit, but HEAD is $head_commit. Tag the release commit."
+  fi
 fi
 
 resolved_version="$(dotnet msbuild "$PROJECT_PATH" -nologo -getProperty:Version)"
@@ -84,4 +94,8 @@ if [[ "$resolved_version" != "$tag_version" ]]; then
   fail "Tag version '$tag_version' does not match canonical version '$resolved_version'."
 fi
 
-echo "[release-tag-check] OK: $TAG is annotated, SemVer-compliant, points to HEAD, and matches version $resolved_version"
+if [[ "$tag_exists" == "true" ]]; then
+  echo "[release-tag-check] OK: $TAG is annotated, SemVer-compliant, points to HEAD, and matches version $resolved_version"
+else
+  echo "[release-tag-check] OK (dry-run intended tag): $TAG is SemVer-compliant, matches version $resolved_version, and tag existence checks were intentionally skipped."
+fi

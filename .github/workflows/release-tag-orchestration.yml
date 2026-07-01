@@ -69,7 +69,13 @@ jobs:
 
       - name: Validate release tag policy
         shell: bash
-        run: bash scripts/validate-release-tag.sh --tag "${{ needs.context.outputs.tag }}"
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ needs.context.outputs.dry_run }}" == "true" ]]; then
+            bash scripts/validate-release-tag.sh --tag "${{ needs.context.outputs.tag }}" --allow-missing-tag
+          else
+            bash scripts/validate-release-tag.sh --tag "${{ needs.context.outputs.tag }}"
+          fi
 
       - name: Restore
         run: dotnet restore Veeling.slnx
