@@ -254,16 +254,16 @@ jobs:
 
           tar -xzf "$archive" -C "$root"
           mv "$root/veeling-${version}-linux-x64" "$current_dir"
-          export PATH="${current_dir}:${PATH}"
+          executable_path="${current_dir}/Veeling.CLI"
 
-          installed_version="$(veeling --version)"
+          installed_version="$("${executable_path}" --version)"
           [[ "$installed_version" == "$version" ]] || { echo "Expected version $version, got $installed_version" >&2; exit 1; }
 
           rm -rf "$current_dir"
           tar -xzf "$archive" -C "$root"
           mv "$root/veeling-${version}-linux-x64" "$current_dir"
 
-          updated_version="$(veeling --version)"
+          updated_version="$("${executable_path}" --version)"
           [[ "$updated_version" == "$version" ]] || { echo "Expected updated version $version, got $updated_version" >&2; exit 1; }
 
   smoke-archive-windows:
