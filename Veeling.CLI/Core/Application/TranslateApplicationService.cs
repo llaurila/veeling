@@ -18,7 +18,8 @@ public sealed class TranslateApplicationService(TranslationJobFactory translatio
         Project project,
         Language from,
         IReadOnlyList<Language> toLanguages,
-        bool dryRun)
+        bool dryRun,
+        bool changed)
     {
         string? warning = null;
 
@@ -54,6 +55,7 @@ public sealed class TranslateApplicationService(TranslationJobFactory translatio
 
                 TranslationJob job = translationJobFactory.Create(project, schema.Model.Name, from, to);
                 job.DryRun = dryRun;
+                job.IncludeChanged = changed && from.Equals(project.Model.MasterLanguage);
                 job.Output = outputLines.Add;
 
                 if (job.HasUntranslatedFields())

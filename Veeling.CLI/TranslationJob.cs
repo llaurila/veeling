@@ -76,6 +76,8 @@ public class TranslationJob
 
     public bool DryRun { get; set; }
 
+    public bool IncludeChanged { get; set; }
+
     public Action<string>? Output { get; set; }
 
     public string SchemaName => schema.Value.Model.Name;
@@ -106,14 +108,24 @@ public class TranslationJob
             }
 
             string fieldName = drr.RecordLocator.Field;
+            string sourceValue = drr.DataModel.Value;
             string value = translatedFields[fieldName];
 
             RecordLocator target = drr.RecordLocator.InLanguage(to);
-            bool exists = session.Get(target.AsFilter()).Any(resultItem => resultItem.DataModel is not null);
+            DataModel? existingTarget = session.Get(target.AsFilter())
+                .Select(static resultItem => resultItem.DataModel)
+                .FirstOrDefault(static dataModel => dataModel is not null);
 
-            if (exists) continue;
+            bool isMissing = existingTarget is null;
+            bool isChanged = existingTarget?.Meta?.IsSourceChanged(from, fieldName, sourceValue) ?? true;
+            bool shouldTranslate = isMissing || (IncludeChanged && isChanged);
 
-            DataModel newData = new()
+            if (!shouldTranslate)
+            {
+                continue;
+            }
+
+            DataModel targetData = existingTarget ?? new DataModel
             {
                 Name = fieldName,
                 Value = value,
@@ -123,12 +135,15 @@ public class TranslationJob
                 }
             };
 
-            newData.Meta.UpdateSourceHash(from, fieldName, drr.DataModel.Value);
-            newData.Meta.Tick("$ai");
+            targetData.Value = value;
+            targetData.Meta ??= new DataMetaModel();
+            targetData.Meta.Status = DataStatus.NeedsReview;
+            targetData.Meta.UpdateSourceHash(from, fieldName, sourceValue);
+            targetData.Meta.Tick("$ai");
 
             if (!DryRun)
             {
-                session.Set(target, newData);
+                session.Set(target, targetData);
             }
 
             WriteLine($"Translated field {fieldName}: {Util.LimitString(value, maxLength: 40)}");
@@ -159,6 +174,16 @@ public class TranslationJob
 
     public bool HasUntranslatedFields()
     {
+        if (HasMissingTargetFields())
+        {
+            return true;
+        }
+
+        return IncludeChanged && HasChangedSourceFields();
+    }
+
+    private bool HasMissingTargetFields()
+    {
         List<DataRetrieveResult> target = [..
             session.Get($"{SchemaName}.*:{to}")
                 .Where(drr => drr.DataModel is not null)
@@ -169,6 +194,39 @@ public class TranslationJob
         HashSet<string> translatedFieldNames = [.. target.Select(drr => drr.DataModel!.Name)];
 
         return schema.Value.Model.Model.Any(x => !translatedFieldNames.Contains(x.Name));
+    }
+
+    private bool HasChangedSourceFields()
+    {
+        Dictionary<string, DataModel> sourceByField = session.Get($"{SchemaName}.*:{from}")
+            .Where(drr => drr.DataModel is not null)
+            .Select(drr => drr.DataModel!)
+            .ToDictionary(dataModel => dataModel.Name);
+
+        foreach (string fieldName in schema.Value.Model.Model.Select(x => x.Name))
+        {
+            if (!sourceByField.TryGetValue(fieldName, out DataModel? sourceData))
+            {
+                continue;
+            }
+
+            RecordLocator target = new RecordLocator(SchemaName, fieldName, to.Code);
+            DataModel? targetData = session.Get(target.AsFilter())
+                .Select(static resultItem => resultItem.DataModel)
+                .FirstOrDefault(static dataModel => dataModel is not null);
+
+            if (targetData is null)
+            {
+                continue;
+            }
+
+            if (targetData.Meta?.IsSourceChanged(from, fieldName, sourceData.Value) ?? true)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private Dictionary<string, string> GetTranslationMap(string json)

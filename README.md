@@ -190,6 +190,17 @@ Translated field Field1: Esimerkkiarvo
 Saving changes... ok
 ```
 
+If translations already exist and you want to also retranslate entries whose master/source content has changed, use `--changed`:
+
+```text
+$ veeling translate --to=fi --changed
+Processing schema 'Schema1' ('en' -> 'fi')...
+Translated field Field1: Esimerkkiarvo
+Saving changes... ok
+```
+
+`veeling translate` without `--changed` keeps the default missing-only behavior.
+
 Let's fetch the values:
 
 ```text
