@@ -34,6 +34,13 @@ public class TranslateCommand : ICliCommand
         Aliases = { "-d" }
     };
 
+    private readonly Option<bool> changedOption = new("--changed")
+    {
+        Description = "Include already translated records whose master/source content has changed.",
+        Required = false,
+        Arity = ArgumentArity.Zero
+    };
+
     public TranslateCommand(TranslateApplicationService translateApplicationService)
     {
         this.translateApplicationService = translateApplicationService;
@@ -43,6 +50,7 @@ public class TranslateCommand : ICliCommand
         Command.Options.Add(fromOption);
         Command.Options.Add(toOption);
         Command.Options.Add(dryRunOption);
+        Command.Options.Add(changedOption);
         Command.SetAction(Execute);
     }
 
@@ -64,19 +72,38 @@ public class TranslateCommand : ICliCommand
         }
 
         bool dryRun = parseResult.GetValue(dryRunOption);
+        bool changed = parseResult.GetValue(changedOption);
 
         try
         {
-            TranslateCommandResult result = translateApplicationService.Execute(project, from, toLanguages, dryRun);
+            TranslateCommandResult result = translateApplicationService.Execute(
+                project,
+                from,
+                toLanguages,
+                dryRun,
+                changed,
+                onProgress: progressEvent =>
+                {
+                    string? line = TranslateProgressFormatter.Format(progressEvent);
+                    if (line is null)
+                    {
+                        return;
+                    }
+
+                    Console.WriteLine(line);
+                });
 
             if (result.Warning is not null)
             {
                 Console.Error.WriteLine(result.Warning);
             }
 
-            foreach (string line in result.OutputLines)
+            if (!result.UsedProgressEvents)
             {
-                Console.WriteLine(line);
+                foreach (string line in result.OutputLines)
+                {
+                    Console.WriteLine(line);
+                }
             }
         }
         catch (CommandExecutionException ex)

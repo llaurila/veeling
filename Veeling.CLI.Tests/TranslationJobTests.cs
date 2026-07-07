@@ -1,10 +1,188 @@
 using Veeling.CLI.Providers;
+using Veeling.Core.Application;
 using Veeling.Models;
 
 namespace Veeling.CLI.Tests;
 
 public class TranslationJobTests
 {
+    [Fact]
+    public void Execute_OneField_ReportsFieldLineInDeterministicOrder()
+    {
+        Project project = MockData.GetMockProject("foobar");
+        MockProjectDataSession session = new(project)
+        {
+            OnGet = recordFilter => recordFilter.ToString() switch
+            {
+                "Schema1.*:en" =>
+                [
+                    new DataRetrieveResult(new DataModel { Name = "Field1", Value = "Hello" }, new RecordLocator("Schema1", "Field1", "en"))
+                ],
+                "Schema1.Field1:fi" =>
+                [
+                    new DataRetrieveResult(null, new RecordLocator("Schema1", "Field1", "fi"))
+                ],
+                "Schema1.*:fi" => [],
+                _ => []
+            }
+        };
+
+        TranslationJob job = new(
+            session,
+            new StaticJsonProvider("{\"Field1\":\"Hei\"}"),
+            project,
+            "Schema1",
+            new Language("en"),
+            new Language("fi"),
+            new ProviderAuthFailureClassifier())
+        {
+            DryRun = true
+        };
+
+        List<string> output = [];
+        job.Output = output.Add;
+
+        job.Execute();
+
+        Assert.Collection(output,
+            line => Assert.Equal("Translated field Field1: Hei", line));
+    }
+
+    [Fact]
+    public void Execute_DryRun_ReportsTranslatedFieldsWithoutSaving()
+    {
+        Project project = MockData.GetMockProject("foobar");
+        MockProjectDataSession session = new(project)
+        {
+            OnGet = recordFilter => recordFilter.ToString() switch
+            {
+                "Schema1.*:en" =>
+                [
+                    new DataRetrieveResult(new DataModel { Name = "Field1", Value = "Hello" }, new RecordLocator("Schema1", "Field1", "en"))
+                ],
+                "Schema1.Field1:fi" =>
+                [
+                    new DataRetrieveResult(null, new RecordLocator("Schema1", "Field1", "fi"))
+                ],
+                "Schema1.*:fi" => [],
+                _ => []
+            }
+        };
+
+        TranslationJob job = new(
+            session,
+            new StaticJsonProvider("{\"Field1\":\"Hei\"}"),
+            project,
+            "Schema1",
+            new Language("en"),
+            new Language("fi"),
+            new ProviderAuthFailureClassifier())
+        {
+            DryRun = true
+        };
+
+        List<string> output = [];
+        job.Output = output.Add;
+
+        job.Execute();
+
+        Assert.Contains("Translated field Field1: Hei", output, StringComparer.Ordinal);
+        Assert.DoesNotContain("Saving changes... ok", output, StringComparer.Ordinal);
+        Assert.Equal(0, session.SaveChangesCalls);
+    }
+
+    [Fact]
+    public void Execute_NonDryRun_ReportsSaveMessage()
+    {
+        Project project = MockData.GetMockProject("foobar");
+        MockProjectDataSession session = new(project)
+        {
+            OnGet = recordFilter => recordFilter.ToString() switch
+            {
+                "Schema1.*:en" =>
+                [
+                    new DataRetrieveResult(new DataModel { Name = "Field1", Value = "Hello" }, new RecordLocator("Schema1", "Field1", "en"))
+                ],
+                "Schema1.Field1:fi" =>
+                [
+                    new DataRetrieveResult(null, new RecordLocator("Schema1", "Field1", "fi"))
+                ],
+                "Schema1.*:fi" => [],
+                _ => []
+            }
+        };
+
+        TranslationJob job = new(
+            session,
+            new StaticJsonProvider("{\"Field1\":\"Hei\"}"),
+            project,
+            "Schema1",
+            new Language("en"),
+            new Language("fi"),
+            new ProviderAuthFailureClassifier())
+        {
+            DryRun = false
+        };
+
+        List<string> output = [];
+        job.Output = output.Add;
+
+        job.Execute();
+
+        Assert.Contains("Saving changes... ok", output, StringComparer.Ordinal);
+        Assert.Equal(1, session.SaveChangesCalls);
+    }
+
+    [Fact]
+    public void Execute_EmitsProgressEvents_ForFieldAndSaveLifecycle()
+    {
+        Project project = MockData.GetMockProject("foobar");
+        MockProjectDataSession session = new(project)
+        {
+            OnGet = recordFilter => recordFilter.ToString() switch
+            {
+                "Schema1.*:en" =>
+                [
+                    new DataRetrieveResult(new DataModel { Name = "Field1", Value = "Hello" }, new RecordLocator("Schema1", "Field1", "en"))
+                ],
+                "Schema1.Field1:fi" =>
+                [
+                    new DataRetrieveResult(null, new RecordLocator("Schema1", "Field1", "fi"))
+                ],
+                "Schema1.*:fi" => [],
+                _ => []
+            }
+        };
+
+        TranslationJob job = new(
+            session,
+            new StaticJsonProvider("{\"Field1\":\"Hei\"}"),
+            project,
+            "Schema1",
+            new Language("en"),
+            new Language("fi"),
+            new ProviderAuthFailureClassifier())
+        {
+            DryRun = false
+        };
+
+        job.ConfigureProgressCounters(
+            progressCompletedCount: 0,
+            progressTotalCount: 1,
+            schemaProgressCompletedCount: 0,
+            schemaProgressTotalCount: 1);
+
+        List<TranslateProgressEvent> events = [];
+        job.OnProgress = events.Add;
+
+        job.Execute();
+
+        Assert.Collection(events,
+            e => Assert.Equal(TranslateProgressEventKind.FieldTranslated, e.Kind),
+            e => Assert.Equal(TranslateProgressEventKind.SaveStarted, e.Kind),
+            e => Assert.Equal(TranslateProgressEventKind.SaveCompleted, e.Kind));
+    }
+
     [Fact]
     public void Execute_IncludesGlossaryRulesAndSoftHintInPrompt()
     {
@@ -107,6 +285,14 @@ public class TranslationJobTests
                 LLMChatMessageRole.Assistant,
                 "{\"Field1\":\"Se connecter\"}"
             );
+        }
+    }
+
+    private sealed class StaticJsonProvider(string json) : ILLMProvider
+    {
+        public LLMChatMessage Complete(params LLMChatMessage[] history)
+        {
+            return new LLMChatMessage(LLMChatMessageRole.Assistant, json);
         }
     }
 }
