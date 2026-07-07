@@ -8,6 +8,51 @@ namespace Veeling.CLI.Tests;
 public class TranslateCommandTests
 {
     [Fact]
+    public async Task Translate_OutputsLegacyBufferedLinesInStableOrder()
+    {
+        using ServiceProvider serviceProvider = CreateServiceProvider(new StaticJsonProviderFactory("{\"Field1\":\"Hei\"}"));
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.TranslateTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en", "fi"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel
+            {
+                Name = "Field1",
+                Value = "Hello"
+            });
+
+            using ConsoleCapture console = new();
+
+            int code = await app.RunAsync([
+                "translate",
+                "--project-file", projectFile.FullName,
+                "--to", "fi",
+                "--dry-run"
+            ]);
+
+            Assert.Equal(0, code);
+
+            string[] lines = console.StdOut.ToString()
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.Equal("Processing schema 'Schema1' ('en' -> 'fi')...", lines[0]);
+            Assert.Equal("[1/1] Translated field Schema1.Field1: Hei", lines[1]);
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Translate_WithNonMasterSource_WarnsAboutQualityAndSoftHints()
     {
         using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
@@ -54,6 +99,12 @@ public class TranslateCommandTests
                 console.StdErr.ToString(),
                 StringComparison.OrdinalIgnoreCase
             );
+
+            string[] lines = console.StdOut.ToString()
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.Equal("Processing schema 'Schema1' ('fi' -> 'fr')...", lines[0]);
+            Assert.Equal("All fields are already translated, skipping.", lines[1]);
         }
         finally
         {
@@ -294,6 +345,52 @@ public class TranslateCommandTests
         }
     }
 
+    [Fact]
+    public async Task Translate_StreamedProgress_DoesNotDuplicateOutputLines()
+    {
+        using ServiceProvider serviceProvider = CreateServiceProvider(new StaticJsonProviderFactory("{\"Field1\":\"Hei\"}"));
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.TranslateTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en", "fi"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel
+            {
+                Name = "Field1",
+                Value = "Hello"
+            });
+
+            using ConsoleCapture console = new();
+
+            int code = await app.RunAsync([
+                "translate",
+                "--project-file", projectFile.FullName,
+                "--to", "fi",
+                "--dry-run"
+            ]);
+
+            Assert.Equal(0, code);
+
+            string[] lines = console.StdOut.ToString()
+                .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.Equal(2, lines.Length);
+            Assert.Equal("Processing schema 'Schema1' ('en' -> 'fi')...", lines[0]);
+            Assert.Equal("[1/1] Translated field Schema1.Field1: Hei", lines[1]);
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
     private static ServiceProvider CreateServiceProvider(ILLMProviderFactory llmProviderFactory)
     {
         ServiceCollection services = new();
@@ -307,6 +404,22 @@ public class TranslateCommandTests
         public ILLMProvider Create(DirectoryInfo projectDirectory)
         {
             return new InvalidJsonProvider();
+        }
+    }
+
+    private sealed class StaticJsonProviderFactory(string json) : ILLMProviderFactory
+    {
+        public ILLMProvider Create(DirectoryInfo projectDirectory)
+        {
+            return new StaticJsonProvider(json);
+        }
+    }
+
+    private sealed class StaticJsonProvider(string json) : ILLMProvider
+    {
+        public LLMChatMessage Complete(params LLMChatMessage[] history)
+        {
+            return new LLMChatMessage(LLMChatMessageRole.Assistant, json);
         }
     }
 

@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Veeling.CLI.Exceptions;
 using Veeling.CLI.Providers;
+using Veeling.Core.Application;
 using Veeling.Models;
 using Veeling.Models.Schema;
 
@@ -28,6 +29,10 @@ public class TranslationJob
 
     private DataRetrieveResult[]? source;
     private Dictionary<string, string>? variables;
+    private int progressCompletedCount;
+    private int progressTotalCount;
+    private int schemaProgressCompletedCount;
+    private int schemaProgressTotalCount;
 
     public TranslationJob(
         IProjectDataSession session,
@@ -76,9 +81,25 @@ public class TranslationJob
 
     public bool DryRun { get; set; }
 
+    public bool IncludeChanged { get; set; }
+
     public Action<string>? Output { get; set; }
 
+    public Action<TranslateProgressEvent>? OnProgress { get; set; }
+
     public string SchemaName => schema.Value.Model.Name;
+
+    public void ConfigureProgressCounters(
+        int progressCompletedCount,
+        int progressTotalCount,
+        int schemaProgressCompletedCount,
+        int schemaProgressTotalCount)
+    {
+        this.progressCompletedCount = progressCompletedCount;
+        this.progressTotalCount = progressTotalCount;
+        this.schemaProgressCompletedCount = schemaProgressCompletedCount;
+        this.schemaProgressTotalCount = schemaProgressTotalCount;
+    }
 
     public void Execute()
     {
@@ -106,14 +127,24 @@ public class TranslationJob
             }
 
             string fieldName = drr.RecordLocator.Field;
+            string sourceValue = drr.DataModel.Value;
             string value = translatedFields[fieldName];
 
             RecordLocator target = drr.RecordLocator.InLanguage(to);
-            bool exists = session.Get(target.AsFilter()).Any(resultItem => resultItem.DataModel is not null);
+            DataModel? existingTarget = session.Get(target.AsFilter())
+                .Select(static resultItem => resultItem.DataModel)
+                .FirstOrDefault(static dataModel => dataModel is not null);
 
-            if (exists) continue;
+            bool isMissing = existingTarget is null;
+            bool isChanged = existingTarget?.Meta?.IsSourceChanged(from, fieldName, sourceValue) ?? true;
+            bool shouldTranslate = isMissing || (IncludeChanged && isChanged);
 
-            DataModel newData = new()
+            if (!shouldTranslate)
+            {
+                continue;
+            }
+
+            DataModel targetData = existingTarget ?? new DataModel
             {
                 Name = fieldName,
                 Value = value,
@@ -123,24 +154,73 @@ public class TranslationJob
                 }
             };
 
-            newData.Meta.UpdateSourceHash(from, fieldName, drr.DataModel.Value);
-            newData.Meta.Tick("$ai");
+            targetData.Value = value;
+            targetData.Meta ??= new DataMetaModel();
+            targetData.Meta.Status = DataStatus.NeedsReview;
+            targetData.Meta.UpdateSourceHash(from, fieldName, sourceValue);
+            targetData.Meta.Tick("$ai");
 
             if (!DryRun)
             {
-                session.Set(target, newData);
+                session.Set(target, targetData);
             }
 
             WriteLine($"Translated field {fieldName}: {Util.LimitString(value, maxLength: 40)}");
+
+            schemaProgressCompletedCount++;
+            progressCompletedCount++;
+
+            OnProgress?.Invoke(new TranslateProgressEvent(
+                Kind: TranslateProgressEventKind.FieldTranslated,
+                SchemaName: SchemaName,
+                SourceLanguage: from,
+                TargetLanguage: to,
+                FieldName: fieldName,
+                TranslatedValuePreview: Util.LimitString(value, maxLength: 40),
+                CompletedCount: progressCompletedCount,
+                TotalCount: progressTotalCount,
+                SchemaCompletedCount: schemaProgressCompletedCount,
+                SchemaTotalCount: schemaProgressTotalCount,
+                DryRun: DryRun
+            ));
+
             translatedCount++;
         }
 
         if (translatedCount == 0)
         {
             WriteLine("No changes.");
+
+            OnProgress?.Invoke(new TranslateProgressEvent(
+                Kind: TranslateProgressEventKind.CompletedWithoutChanges,
+                SchemaName: SchemaName,
+                SourceLanguage: from,
+                TargetLanguage: to,
+                FieldName: null,
+                TranslatedValuePreview: null,
+                CompletedCount: progressCompletedCount,
+                TotalCount: progressTotalCount,
+                SchemaCompletedCount: schemaProgressCompletedCount,
+                SchemaTotalCount: schemaProgressTotalCount,
+                DryRun: DryRun
+            ));
         }
         else if (!DryRun)
         {
+            OnProgress?.Invoke(new TranslateProgressEvent(
+                Kind: TranslateProgressEventKind.SaveStarted,
+                SchemaName: SchemaName,
+                SourceLanguage: from,
+                TargetLanguage: to,
+                FieldName: null,
+                TranslatedValuePreview: null,
+                CompletedCount: progressCompletedCount,
+                TotalCount: progressTotalCount,
+                SchemaCompletedCount: schemaProgressCompletedCount,
+                SchemaTotalCount: schemaProgressTotalCount,
+                DryRun: DryRun
+            ));
+
             try
             {
                 session.SaveChanges();
@@ -154,21 +234,69 @@ public class TranslationJob
             }
 
             WriteLine("Saving changes... ok");
+
+            OnProgress?.Invoke(new TranslateProgressEvent(
+                Kind: TranslateProgressEventKind.SaveCompleted,
+                SchemaName: SchemaName,
+                SourceLanguage: from,
+                TargetLanguage: to,
+                FieldName: null,
+                TranslatedValuePreview: null,
+                CompletedCount: progressCompletedCount,
+                TotalCount: progressTotalCount,
+                SchemaCompletedCount: schemaProgressCompletedCount,
+                SchemaTotalCount: schemaProgressTotalCount,
+                DryRun: DryRun
+            ));
         }
     }
 
     public bool HasUntranslatedFields()
     {
-        List<DataRetrieveResult> target = [..
-            session.Get($"{SchemaName}.*:{to}")
-                .Where(drr => drr.DataModel is not null)
-        ];
+        return GetTranslationCandidateFields().Count > 0;
+    }
 
-        if (target.Count == 0) return true;
+    public IReadOnlyList<string> GetTranslationCandidateFields()
+    {
+        Dictionary<string, DataModel> sourceByField = session.Get($"{SchemaName}.*:{from}")
+            .Where(drr => drr.DataModel is not null)
+            .Select(drr => drr.DataModel!)
+            .ToDictionary(dataModel => dataModel.Name);
 
-        HashSet<string> translatedFieldNames = [.. target.Select(drr => drr.DataModel!.Name)];
+        List<string> candidates = [];
 
-        return schema.Value.Model.Model.Any(x => !translatedFieldNames.Contains(x.Name));
+        foreach (string fieldName in schema.Value.Model.Model.Select(x => x.Name))
+        {
+            if (!sourceByField.TryGetValue(fieldName, out DataModel? sourceData))
+            {
+                continue;
+            }
+
+            RecordLocator target = new RecordLocator(SchemaName, fieldName, to.Code);
+            DataModel? targetData = session.Get(target.AsFilter())
+                .Select(static resultItem => resultItem.DataModel)
+                .FirstOrDefault(static dataModel => dataModel is not null);
+
+            bool isMissing = targetData is null;
+            if (isMissing)
+            {
+                candidates.Add(fieldName);
+                continue;
+            }
+
+            if (!IncludeChanged)
+            {
+                continue;
+            }
+
+            bool isChanged = targetData!.Meta?.IsSourceChanged(from, fieldName, sourceData.Value) ?? true;
+            if (isChanged)
+            {
+                candidates.Add(fieldName);
+            }
+        }
+
+        return candidates;
     }
 
     private Dictionary<string, string> GetTranslationMap(string json)

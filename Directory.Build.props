@@ -4,7 +4,7 @@
       Canonical Veeling version source.
       Update this value for a new release; CLI/package metadata then inherit automatically.
     -->
-    <VeelingVersion>0.4.1</VeelingVersion>
+    <VeelingVersion>0.4.3</VeelingVersion>
     <Version>$(VeelingVersion)</Version>
   </PropertyGroup>
 </Project>
