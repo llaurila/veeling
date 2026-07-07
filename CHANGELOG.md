@@ -8,6 +8,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- _None yet._
+
+### Changed
+
+- _None yet._
+
+### Deprecated
+
+- _None yet._
+
+### Removed
+
+- _None yet._
+
+### Fixed
+
+- _None yet._
+
+### Security
+
+- _None yet._
+
+## [0.4.3] - 2026-07-07
+
+### Added
+
 - Added real-time `veeling translate` progress streaming with structured progress events and live `[n/total]` field updates in CLI output.
 
 ### Changed
