@@ -1,0 +1,44 @@
+{
+  "name": "@veeling/cli",
+  "version": "0.0.0-dev",
+  "description": "Veeling CLI packaged for local frontend project usage.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/llaurila/veeling.git"
+  },
+  "homepage": "https://github.com/llaurila/veeling",
+  "bugs": {
+    "url": "https://github.com/llaurila/veeling/issues"
+  },
+  "keywords": [
+    "veeling",
+    "cli",
+    "i18n",
+    "translation",
+    "localization"
+  ],
+  "type": "commonjs",
+  "bin": {
+    "veeling": "bin/veeling.cjs"
+  },
+  "files": [
+    "bin/",
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "optionalDependencies": {
+    "@veeling/cli-win32-x64": "0.0.0-dev",
+    "@veeling/cli-linux-x64": "0.0.0-dev",
+    "@veeling/cli-darwin-x64": "0.0.0-dev",
+    "@veeling/cli-darwin-arm64": "0.0.0-dev"
+  },
+  "scripts": {
+    "verify-local": "node ./scripts/verify-local-install.cjs"
+  }
+}

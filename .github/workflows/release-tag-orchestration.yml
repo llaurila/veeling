@@ -15,6 +15,11 @@ on:
         required: false
         default: true
         type: boolean
+      npm_break_glass_authorization:
+        description: "Optional incident authorization string for npm token fallback. Must be entered by vincentlaurila as: vincentlaurila:<tag>:single-release-incident"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -26,8 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.resolve.outputs.tag }}
+      release_version: ${{ steps.resolve.outputs.release_version }}
       dry_run: ${{ steps.resolve.outputs.dry_run }}
       release_url: ${{ steps.resolve.outputs.release_url }}
+      npm_break_glass_authorization: ${{ steps.resolve.outputs.npm_break_glass_authorization }}
     steps:
       - name: Resolve tag and dry-run mode
         id: resolve
@@ -49,8 +56,15 @@ jobs:
           fi
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release_version=${tag#v}" >> "$GITHUB_OUTPUT"
           echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
           echo "release_url=https://github.com/${{ github.repository }}/releases/tag/$tag" >> "$GITHUB_OUTPUT"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "npm_break_glass_authorization=${{ inputs.npm_break_glass_authorization }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "npm_break_glass_authorization=" >> "$GITHUB_OUTPUT"
+          fi
 
   preflight:
     name: Preflight guards
@@ -175,6 +189,36 @@ jobs:
           cp ./artifacts/releases/* ./artifacts/release-bundle/
           cp ./artifacts/nupkg/*.nupkg ./artifacts/release-bundle/
           cp ./artifacts/release-notes.md ./artifacts/release-bundle/release-notes.md
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stage npm platform payloads from release archives
+        shell: pwsh
+        run: |
+          ./scripts/stage-npm-artifacts.ps1 -Version "${{ needs.context.outputs.release_version }}" -ArchiveInput ./artifacts/releases -NpmRoot ./npm -Clean
+
+      - name: Pack npm workspace packages
+        shell: bash
+        working-directory: ./npm
+        run: |
+          set -euo pipefail
+          mkdir -p ../artifacts/npm
+          npm pack --workspaces --include-workspace-root=false --pack-destination ../artifacts/npm
+
+      - name: Verify npm tarball content safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          node ./scripts/verify-npm-tarball-contents.mjs ./artifacts/npm/*.tgz
+
+      - name: Add npm tarballs to release bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp ./artifacts/npm/*.tgz ./artifacts/release-bundle/
 
       - name: Upload release bundle artifact
         uses: actions/upload-artifact@v4
@@ -304,6 +348,111 @@ jobs:
           $updated = (& (Join-Path $current "Veeling.CLI.exe") --version).Trim()
           if (-not ($updated -eq $version -or $updated.StartsWith("$version+"))) { throw "Expected updated version $version (optionally with build metadata), got $updated" }
 
+  smoke-npm-linux:
+    name: Smoke (npm local dev-dependency path linux-x64)
+    runs-on: ubuntu-latest
+    needs:
+      - context
+      - package-artifacts
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.context.outputs.tag }}
+          path: ./artifacts/release-bundle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm install smoke (linux)
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.context.outputs.release_version }}"
+          node ./scripts/smoke-npm-install.mjs \
+            "./artifacts/release-bundle/veeling-cli-linux-x64-${version}.tgz" \
+            "./artifacts/release-bundle/veeling-cli-${version}.tgz"
+
+  smoke-npm-windows:
+    name: Smoke (npm local dev-dependency path win-x64)
+    runs-on: windows-latest
+    needs:
+      - context
+      - package-artifacts
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.context.outputs.tag }}
+          path: .\artifacts\release-bundle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm install smoke (windows)
+        shell: pwsh
+        run: |
+          $version = "${{ needs.context.outputs.release_version }}"
+          node .\scripts\smoke-npm-install.mjs ".\artifacts\release-bundle\veeling-cli-win32-x64-$version.tgz" ".\artifacts\release-bundle\veeling-cli-$version.tgz"
+
+  smoke-npm-macos-arm64:
+    name: Smoke (npm local dev-dependency path darwin-arm64)
+    runs-on: macos-14
+    needs:
+      - context
+      - package-artifacts
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.context.outputs.tag }}
+          path: ./artifacts/release-bundle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm install smoke (macOS arm64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.context.outputs.release_version }}"
+          node ./scripts/smoke-npm-install.mjs \
+            "./artifacts/release-bundle/veeling-cli-darwin-arm64-${version}.tgz" \
+            "./artifacts/release-bundle/veeling-cli-${version}.tgz"
+
+  smoke-npm-macos-x64:
+    name: Smoke (npm local dev-dependency path darwin-x64)
+    runs-on: macos-13
+    needs:
+      - context
+      - package-artifacts
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.context.outputs.tag }}
+          path: ./artifacts/release-bundle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: npm install smoke (macOS x64)
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.context.outputs.release_version }}"
+          node ./scripts/smoke-npm-install.mjs \
+            "./artifacts/release-bundle/veeling-cli-darwin-x64-${version}.tgz" \
+            "./artifacts/release-bundle/veeling-cli-${version}.tgz"
+
   publish-github-release:
     name: Publish GitHub release
     runs-on: ubuntu-latest
@@ -313,6 +462,10 @@ jobs:
       - smoke-nuget-tool
       - smoke-archive-linux
       - smoke-archive-windows
+      - smoke-npm-linux
+      - smoke-npm-windows
+      - smoke-npm-macos-arm64
+      - smoke-npm-macos-x64
     if: needs.context.outputs.dry_run != 'true'
     steps:
       - name: Download release bundle artifact
@@ -329,6 +482,7 @@ jobs:
           body_path: ./artifacts/release-bundle/release-notes.md
           files: |
             ./artifacts/release-bundle/*.nupkg
+            ./artifacts/release-bundle/*.tgz
             ./artifacts/release-bundle/*.zip
             ./artifacts/release-bundle/*.tar.gz
             ./artifacts/release-bundle/*.asc
@@ -400,6 +554,150 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --skip-duplicate
 
+  publish-npm:
+    name: Publish npm packages (guarded)
+    runs-on: ubuntu-latest
+    needs:
+      - context
+      - package-artifacts
+      - smoke-npm-linux
+      - smoke-npm-windows
+      - smoke-npm-macos-arm64
+      - smoke-npm-macos-x64
+    if: needs.context.outputs.dry_run != 'true'
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download release bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-${{ needs.context.outputs.tag }}
+          path: ./artifacts/release-bundle
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve npm token fallback incident authorization
+        id: fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          auth_input="${{ needs.context.outputs.npm_break_glass_authorization }}"
+          expected="vincentlaurila:${{ needs.context.outputs.tag }}:single-release-incident"
+          allow_fallback="false"
+
+          if [[ -n "$auth_input" ]]; then
+            if [[ "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+              echo "Break-glass authorization is only accepted in workflow_dispatch runs." >&2
+              exit 1
+            fi
+
+            if [[ "${{ github.actor }}" != "vincentlaurila" ]]; then
+              echo "Only vincentlaurila may authorize npm token fallback." >&2
+              exit 1
+            fi
+
+            if [[ "$auth_input" != "$expected" ]]; then
+              echo "Invalid break-glass authorization value. Expected exact format for this tag: $expected" >&2
+              exit 1
+            fi
+
+            allow_fallback="true"
+          fi
+
+          echo "allow_fallback=$allow_fallback" >> "$GITHUB_OUTPUT"
+
+      - name: Publish npm package family (Trusted Publishing primary, token fallback gated)
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          version="${{ needs.context.outputs.release_version }}"
+          package_entries=(
+            "@veeling/cli-win32-x64|./artifacts/release-bundle/veeling-cli-win32-x64-${version}.tgz"
+            "@veeling/cli-linux-x64|./artifacts/release-bundle/veeling-cli-linux-x64-${version}.tgz"
+            "@veeling/cli-darwin-x64|./artifacts/release-bundle/veeling-cli-darwin-x64-${version}.tgz"
+            "@veeling/cli-darwin-arm64|./artifacts/release-bundle/veeling-cli-darwin-arm64-${version}.tgz"
+            "@veeling/cli|./artifacts/release-bundle/veeling-cli-${version}.tgz"
+          )
+
+          is_already_published() {
+            local package_name="$1"
+            npm view "${package_name}@${version}" version --json >/dev/null 2>&1
+          }
+
+          publish_one() {
+            local package_name="$1"
+            local tarball="$2"
+            local trusted_log
+
+            trusted_log="$(mktemp)"
+
+            set +e
+            npm publish "$tarball" --access public --provenance 2>&1 | tee "$trusted_log"
+            trusted_exit=$?
+            set -e
+
+            if [[ $trusted_exit -eq 0 ]]; then
+              echo "npm publish succeeded via Trusted Publishing for ${package_name}@${version}"
+              return 0
+            fi
+
+            if grep -Eiq "previously published|cannot publish over the previously published versions" "$trusted_log"; then
+              echo "${package_name}@${version} already exists. Treating as idempotent success."
+              rm -f "$trusted_log"
+              return 0
+            fi
+
+            echo "Trusted Publishing publish attempt failed for ${package_name}@${version} with exit code $trusted_exit"
+            if [[ "${{ steps.fallback.outputs.allow_fallback }}" != "true" ]]; then
+              echo "Fallback is disabled by policy. Failing closed."
+              rm -f "$trusted_log"
+              return "$trusted_exit"
+            fi
+
+            if [[ -z "${NPM_TOKEN:-}" ]]; then
+              echo "Fallback authorized but NPM_TOKEN is not configured. Failing closed."
+              rm -f "$trusted_log"
+              return "$trusted_exit"
+            fi
+
+            if ! grep -Eiq "trusted publishing|oidc|id token|provenance|authentication|auth" "$trusted_log"; then
+              echo "Trusted publish failed for a non-auth/non-trusted-publishing reason; fallback blocked by safety policy."
+              rm -f "$trusted_log"
+              return "$trusted_exit"
+            fi
+
+            rm -f "$trusted_log"
+
+            echo "Executing authorized single-release-incident npm token fallback for ${package_name}@${version}"
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "$tarball" --access public --provenance
+          }
+
+          for entry in "${package_entries[@]}"; do
+            package_name="${entry%%|*}"
+            tarball="${entry#*|}"
+
+            if [[ ! -f "$tarball" ]]; then
+              echo "Missing expected npm tarball: $tarball" >&2
+              exit 1
+            fi
+
+            if is_already_published "$package_name"; then
+              echo "${package_name}@${version} already published before this run; skipping publish."
+              continue
+            fi
+
+            publish_one "$package_name" "$tarball"
+          done
+
   release-summary:
     name: Release summary
     runs-on: ubuntu-latest
@@ -410,8 +708,13 @@ jobs:
       - smoke-nuget-tool
       - smoke-archive-linux
       - smoke-archive-windows
+      - smoke-npm-linux
+      - smoke-npm-windows
+      - smoke-npm-macos-arm64
+      - smoke-npm-macos-x64
       - publish-github-release
       - publish-nuget
+      - publish-npm
     if: always()
     steps:
       - name: Write workflow summary
@@ -428,6 +731,11 @@ jobs:
             echo "- smoke-nuget-tool: ${{ needs.smoke-nuget-tool.result }}"
             echo "- smoke-archive-linux: ${{ needs.smoke-archive-linux.result }}"
             echo "- smoke-archive-windows: ${{ needs.smoke-archive-windows.result }}"
+            echo "- smoke-npm-linux: ${{ needs.smoke-npm-linux.result }}"
+            echo "- smoke-npm-windows: ${{ needs.smoke-npm-windows.result }}"
+            echo "- smoke-npm-macos-arm64: ${{ needs.smoke-npm-macos-arm64.result }}"
+            echo "- smoke-npm-macos-x64: ${{ needs.smoke-npm-macos-x64.result }}"
             echo "- publish-github-release: ${{ needs.publish-github-release.result }}"
             echo "- publish-nuget: ${{ needs.publish-nuget.result }}"
+            echo "- publish-npm: ${{ needs.publish-npm.result }}"
           } >> "$GITHUB_STEP_SUMMARY"

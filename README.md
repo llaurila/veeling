@@ -4,6 +4,20 @@ An AI-powered translation management tool with a command-line interface.
 
 ## Installation
 
+Frontend/local-project (preferred for JS/TS repos):
+
+```bash
+npm install -D @veeling/cli
+```
+
+Run with local tooling:
+
+```bash
+npx veeling --version
+```
+
+Global machine install (default global channel):
+
 Install Veeling as a global .NET tool from NuGet:
 
 ```bash

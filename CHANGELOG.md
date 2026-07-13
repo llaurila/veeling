@@ -40,6 +40,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - _None yet._
 
+## [0.4.4] - 2026-07-14
+
+### Added
+
+- Added npm workspace packaging for Veeling CLI with publishable packages:
+  - `@veeling/cli` (meta package)
+  - `@veeling/cli-win32-x64`
+  - `@veeling/cli-linux-x64`
+  - `@veeling/cli-darwin-x64`
+  - `@veeling/cli-darwin-arm64`
+- Added CI npm smoke validations for local dev-dependency install/execute flows across Linux, Windows, macOS arm64, and macOS x64 release payloads.
+
+### Changed
+
+- Release tag orchestration now includes guarded npm publication alongside NuGet/GitHub release publication gates.
+- npm publication flow now enforces Trusted Publishing as primary with an explicit, operator-gated break-glass token fallback path.
+
 ### Deprecated
 
 - _None yet._
@@ -54,7 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
-- _None yet._
+- Hardened npm publish failover safety by requiring strict single-incident authorization (`vincentlaurila:<tag>:single-release-incident`) before token fallback can be used.
 
 ## [0.4.2] - 2026-07-03
 

@@ -2,7 +2,34 @@
 
 This guide defines the official installation and update paths for Veeling.
 
-## Primary channel (official): NuGet global tool
+## Primary frontend channel: npm local dev dependency
+
+Install in a frontend project:
+
+```bash
+npm install -D @veeling/cli
+```
+
+Run via local binary shims:
+
+```bash
+npx veeling --version
+```
+
+Supported npm package payloads:
+
+- `@veeling/cli` (meta package)
+- `@veeling/cli-win32-x64`
+- `@veeling/cli-linux-x64`
+- `@veeling/cli-darwin-x64`
+- `@veeling/cli-darwin-arm64`
+
+Notes:
+
+- npm is the preferred install path for frontend/local-project usage.
+- The package family contains prebuilt binaries; install-time downloaders are intentionally avoided.
+
+## Default global channel (official): NuGet global tool
 
 Install:
 
@@ -264,6 +291,34 @@ Fallback only (if explicitly authorized):
 ```bash
 dotnet nuget push ./artifacts/nupkg/veeling.*.nupkg --api-key <NUGET_API_KEY> --source https://api.nuget.org/v3/index.json
 ```
+
+### Maintainer npm release preparation
+
+Npm package payloads are derived from the same release archive outputs and canonical version source (`Directory.Build.props`).
+
+Local packaging rehearsal (no publish):
+
+```powershell
+./scripts/stage-npm-artifacts.ps1 -Version v<X.Y.Z> -ArchiveInput ./artifacts/releases -NpmRoot ./npm -Clean
+```
+
+Then pack workspace packages:
+
+```bash
+npm --prefix ./npm pack --workspaces --include-workspace-root=false --pack-destination ./artifacts/npm
+```
+
+Content safety validation (deny private-only paths from tarballs):
+
+```bash
+node ./scripts/verify-npm-tarball-contents.mjs ./artifacts/npm/*.tgz
+```
+
+Publish policy:
+
+- Trusted publishing + provenance is primary.
+- Token fallback is break-glass only, and may be authorized **only by `vincentlaurila`** for **one release incident**.
+- No npm credentials are stored in-repo.
 
 ### Tag-driven release orchestration (GitHub Actions)
 

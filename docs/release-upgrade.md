@@ -4,7 +4,8 @@ This guide is the public-facing reference for Veeling release expectations and s
 
 ## Supported release channels
 
-- **Primary:** NuGet global tool (`veeling`)
+- **Frontend/local-project preferred:** npm dev dependency (`@veeling/cli`)
+- **Global machine default:** NuGet global tool (`veeling`)
 - **Secondary:** standalone OS archives published with release artifacts
 
 Canonical install/update commands are documented in `docs/installation.md`.
@@ -32,6 +33,20 @@ If required, force NuGet.org source:
 dotnet tool update --global veeling --add-source https://api.nuget.org/v3/index.json
 ```
 
+### npm channel
+
+Update to latest:
+
+```bash
+npm install -D @veeling/cli@latest
+```
+
+Run local binary:
+
+```bash
+npx veeling --version
+```
+
 ### Archive channel
 
 1. Download the new archive for your RID.
@@ -48,6 +63,20 @@ Reinstall previous known-good version explicitly:
 ```bash
 dotnet tool install --global veeling --version <previous-version>
 ```
+
+### npm rollback
+
+Pin to previous known-good release:
+
+```bash
+npm install -D @veeling/cli@<previous-version>
+```
+
+If a bad version is published, maintainers should prefer non-destructive recovery:
+
+- adjust dist-tags,
+- publish a fixed follow-up release,
+- deprecate the affected version with guidance.
 
 ### Archive rollback
 
