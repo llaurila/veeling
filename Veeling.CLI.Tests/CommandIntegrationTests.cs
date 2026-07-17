@@ -430,6 +430,257 @@ public class CommandIntegrationTests
     }
 
     [Fact]
+    public async Task Export_WithoutSelector_ExportsAllRecordsLikeWildcardSelector()
+    {
+        using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.CommandTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en", "fi"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema2", "FieldA");
+
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel { Name = "Field1", Value = "Hello" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "fi", new DataModel { Name = "Field1", Value = "Hei" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "en", new DataModel { Name = "FieldA", Value = "Alpha" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "fi", new DataModel { Name = "FieldA", Value = "Alfa" });
+
+            string defaultPayload;
+            using (ConsoleCapture console = new())
+            {
+                int code = await app.RunAsync([
+                    "export",
+                    "--project-file", projectFile.FullName,
+                    "--format", "json"
+                ]);
+
+                Assert.Equal(0, code);
+                defaultPayload = console.StdOut.ToString();
+            }
+
+            string wildcardPayload;
+            using (ConsoleCapture console = new())
+            {
+                int code = await app.RunAsync([
+                    "export",
+                    "--project-file", projectFile.FullName,
+                    "--format", "json",
+                    "*.*:*"
+                ]);
+
+                Assert.Equal(0, code);
+                wildcardPayload = console.StdOut.ToString();
+            }
+
+            using JsonDocument defaultJson = JsonDocument.Parse(defaultPayload);
+            using JsonDocument wildcardJson = JsonDocument.Parse(wildcardPayload);
+
+            Assert.True(defaultJson.RootElement.TryGetProperty("Schema1.Field1:en", out _));
+            Assert.True(defaultJson.RootElement.TryGetProperty("Schema1.Field1:fi", out _));
+            Assert.True(defaultJson.RootElement.TryGetProperty("Schema2.FieldA:en", out _));
+            Assert.True(defaultJson.RootElement.TryGetProperty("Schema2.FieldA:fi", out _));
+
+            Assert.Equal(
+                wildcardJson.RootElement.GetRawText(),
+                defaultJson.RootElement.GetRawText());
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Export_SchemaSelector_NarrowsToMatchingSchema()
+    {
+        using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.CommandTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en", "fi"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema2", "FieldA");
+
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel { Name = "Field1", Value = "Hello" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "fi", new DataModel { Name = "Field1", Value = "Hei" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "en", new DataModel { Name = "FieldA", Value = "Alpha" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "fi", new DataModel { Name = "FieldA", Value = "Alfa" });
+
+            using ConsoleCapture console = new();
+
+            int code = await app.RunAsync([
+                "export",
+                "--project-file", projectFile.FullName,
+                "--format", "json",
+                "Schema1.*:*"
+            ]);
+
+            Assert.Equal(0, code);
+
+            using JsonDocument json = JsonDocument.Parse(console.StdOut.ToString());
+            Assert.True(json.RootElement.TryGetProperty("Schema1.Field1:en", out _));
+            Assert.True(json.RootElement.TryGetProperty("Schema1.Field1:fi", out _));
+            Assert.False(json.RootElement.TryGetProperty("Schema2.FieldA:en", out _));
+            Assert.False(json.RootElement.TryGetProperty("Schema2.FieldA:fi", out _));
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Export_LanguageSelector_NarrowsToMatchingLanguage()
+    {
+        using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.CommandTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en", "fi"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema2", "FieldA");
+
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel { Name = "Field1", Value = "Hello" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "fi", new DataModel { Name = "Field1", Value = "Hei" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "en", new DataModel { Name = "FieldA", Value = "Alpha" });
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema2", "fi", new DataModel { Name = "FieldA", Value = "Alfa" });
+
+            using ConsoleCapture console = new();
+
+            int code = await app.RunAsync([
+                "export",
+                "--project-file", projectFile.FullName,
+                "--format", "json",
+                "*.*:en"
+            ]);
+
+            Assert.Equal(0, code);
+
+            using JsonDocument json = JsonDocument.Parse(console.StdOut.ToString());
+            Assert.True(json.RootElement.TryGetProperty("Schema1.Field1:en", out _));
+            Assert.True(json.RootElement.TryGetProperty("Schema2.FieldA:en", out _));
+            Assert.False(json.RootElement.TryGetProperty("Schema1.Field1:fi", out _));
+            Assert.False(json.RootElement.TryGetProperty("Schema2.FieldA:fi", out _));
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Export_NoMatchSelector_YamlAndJsonReturnEmptyPayloadWithSuccess()
+    {
+        using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.CommandTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel { Name = "Field1", Value = "Hello" });
+
+            string yamlPayload;
+            using (ConsoleCapture console = new())
+            {
+                int code = await app.RunAsync([
+                    "export",
+                    "--project-file", projectFile.FullName,
+                    "NoSuchSchema.*:*"
+                ]);
+
+                Assert.Equal(0, code);
+                yamlPayload = console.StdOut.ToString();
+            }
+
+            string jsonPayload;
+            using (ConsoleCapture console = new())
+            {
+                int code = await app.RunAsync([
+                    "export",
+                    "--project-file", projectFile.FullName,
+                    "--format", "json",
+                    "NoSuchSchema.*:*"
+                ]);
+
+                Assert.Equal(0, code);
+                jsonPayload = console.StdOut.ToString();
+            }
+
+            Assert.Equal("{}", yamlPayload.Trim());
+
+            using JsonDocument json = JsonDocument.Parse(jsonPayload);
+            Assert.Empty(json.RootElement.EnumerateObject());
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Export_InvalidSelector_ReturnsValidationErrorAndNonZeroExitCode()
+    {
+        using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();
+        App app = serviceProvider.GetRequiredService<App>();
+
+        string rootPath = Path.Combine(Path.GetTempPath(), "Veeling.CommandTests", Guid.NewGuid().ToString("N"));
+        DirectoryInfo projectDirectory = Directory.CreateDirectory(rootPath);
+
+        try
+        {
+            FileInfo projectFile = TestProjectFactory.CreateProjectFile(projectDirectory, ["en"], "en");
+            TestProjectFactory.CreateSchemaFile(projectDirectory, "Schema1", "Field1");
+            TestProjectFactory.CreateDataFile(projectDirectory, "Schema1", "en", new DataModel { Name = "Field1", Value = "Hello" });
+
+            using ConsoleCapture console = new();
+
+            int code = await app.RunAsync([
+                "export",
+                "--project-file", projectFile.FullName,
+                "invalid"
+            ]);
+
+            Assert.Equal(1, code);
+            Assert.Contains("Expected format: <schema>.<field>:<lang>", console.StdErr.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (projectDirectory.Exists)
+            {
+                projectDirectory.Delete(true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task Publish_UsesMasterFallbackForMissingTargetLanguageData()
     {
         using ServiceProvider serviceProvider = CliTestHost.CreateServiceProvider();

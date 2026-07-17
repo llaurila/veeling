@@ -29,6 +29,16 @@ public sealed class CommandCatalogBuilderTests
 
         CommandCatalogEntry modify = Assert.Single(catalog.Commands, command => command.PathSegments.SequenceEqual(["modify"]));
         Assert.Contains(modify.Options, option => string.Equals(option.Name, "--force", StringComparison.Ordinal));
-        Assert.Contains(modify.Arguments, argument => string.Equals(argument.Name, "record-spec", StringComparison.Ordinal));
+        CommandCatalogArgument modifyRecordSpec = Assert.Single(modify.Arguments, argument => string.Equals(argument.Name, "record-spec", StringComparison.Ordinal));
+        Assert.Equal(1, modifyRecordSpec.MinimumArity);
+        Assert.Equal(1, modifyRecordSpec.MaximumArity);
+
+        CommandCatalogEntry export = Assert.Single(catalog.Commands, command => command.PathSegments.SequenceEqual(["export"]));
+        CommandCatalogArgument exportSelector = Assert.Single(export.Arguments, argument => string.Equals(argument.Name, "selector", StringComparison.Ordinal));
+        Assert.Equal(0, exportSelector.MinimumArity);
+        Assert.Equal(1, exportSelector.MaximumArity);
+
+        CommandCatalogEntry translate = Assert.Single(catalog.Commands, command => command.PathSegments.SequenceEqual(["translate"]));
+        Assert.Contains(translate.Options, option => string.Equals(option.Name, "--changed", StringComparison.Ordinal));
     }
 }

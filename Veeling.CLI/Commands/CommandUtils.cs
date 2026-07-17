@@ -27,6 +27,15 @@ public static class CommandUtils
         };
     }
 
+    public static Argument<string?> CreateOptionalSelectorArgument()
+    {
+        return new Argument<string?>("selector")
+        {
+            Description = "Optional selector in the format '<schema>.<field>:<language>' (omit to export all: '*.*:*').",
+            Arity = ArgumentArity.ZeroOrOne
+        };
+    }
+
     public static Project? GetProject(ParseResult parseResult, Option<string> projectFileOption)
     {
         FileInfo projectFile = GetProjectFileInfo(parseResult, projectFileOption);
