@@ -12,23 +12,41 @@ public enum ExportOutputFormat
     Json
 }
 
+public sealed record ExportCommandRequest(
+    Project Project,
+    string? Selector,
+    ExportOutputFormat Format
+);
+
 public sealed class ExportApplicationService(IProjectDataSessionFactory sessionFactory)
 {
-    public string Execute(Project project, RecordFilter recordSpec, ExportOutputFormat format)
+    public string Execute(ExportCommandRequest request)
     {
-        IProjectDataSession session = sessionFactory.Open(project);
+        RecordFilter recordSpec = ResolveSelector(request.Selector);
+
+        IProjectDataSession session = sessionFactory.Open(request.Project);
         DataRetrieveResult[] results = [.. session.Get(recordSpec)];
 
         Dictionary<string, string?> export = results.ToDictionary(
             drr => drr.RecordLocator.ToString(),
             drr => drr.DataModel?.Value);
 
-        return format switch
+        return request.Format switch
         {
             ExportOutputFormat.Yaml => SerializeYaml(export),
             ExportOutputFormat.Json => SerializeJson(export),
             _ => throw new InvalidOperationException("Unsupported export format.")
         };
+    }
+
+    private static RecordFilter ResolveSelector(string? selector)
+    {
+        if (string.IsNullOrWhiteSpace(selector))
+        {
+            return RecordFilter.Parse("*.*:*");
+        }
+
+        return RecordFilter.Parse(selector);
     }
 
     private static string SerializeYaml(object data)

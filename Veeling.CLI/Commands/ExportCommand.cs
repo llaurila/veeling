@@ -27,7 +27,7 @@ public class ExportCommand : ICliCommand
 {
     private readonly ExportApplicationService exportApplicationService;
     private readonly Option<string> projectFileOption = CommandUtils.CreateProjectFileOption();
-    private readonly Argument<string> recordSpecArgument = CommandUtils.CreateRecordSpecArgument();
+    private readonly Argument<string?> selectorArgument = CommandUtils.CreateOptionalSelectorArgument();
 
     private readonly Option<string> formatOption = new("--format")
     {
@@ -41,10 +41,10 @@ public class ExportCommand : ICliCommand
     {
         this.exportApplicationService = exportApplicationService;
 
-        Command = new Command("export", "Export/view record(s).");
+        Command = new Command("export", "Export/view records (selector optional; defaults to *.*:*).");
         Command.Options.Add(projectFileOption);
         Command.Options.Add(formatOption);
-        Command.Arguments.Add(recordSpecArgument);
+        Command.Arguments.Add(selectorArgument);
         Command.SetAction(Execute);
     }
 
@@ -52,8 +52,6 @@ public class ExportCommand : ICliCommand
 
     private int Execute(ParseResult parseResult)
     {
-        if (!CommandUtils.TryGetRecordSpec(parseResult, recordSpecArgument, out RecordFilter recordSpec)) return 1;
-
         Project? project = CommandUtils.GetProject(parseResult, projectFileOption);
         if (project is null)
         {
@@ -71,7 +69,12 @@ public class ExportCommand : ICliCommand
 
         try
         {
-            string output = exportApplicationService.Execute(project, recordSpec, format.Value.ToOutputFormat());
+            ExportCommandRequest request = new(
+                Project: project,
+                Selector: parseResult.GetValue(selectorArgument),
+                Format: format.Value.ToOutputFormat());
+
+            string output = exportApplicationService.Execute(request);
             Console.WriteLine(output);
         }
         catch (Exception ex) when (ex is ArgumentException or FileNotFoundException)

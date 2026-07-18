@@ -38,6 +38,28 @@ public class RecordFilterTests
         Assert.Equal(FormatErrorMessage, ex.Message);
     }
 
+    [Fact]
+    public void Constructor_SchemaWildcardSelector_IsParsedAsProvided()
+    {
+        RecordFilter spec = RecordFilter.Parse("MySchema.*:*");
+
+        Assert.Equal("MySchema", spec.Schema.ToString());
+        Assert.Equal("*", spec.Field.ToString());
+        Assert.Equal("*", spec.Language.ToString());
+        Assert.Equal("MySchema.*:*", spec.ToString());
+    }
+
+    [Fact]
+    public void Constructor_LanguageWildcardSelector_IsParsedAsProvided()
+    {
+        RecordFilter spec = RecordFilter.Parse("*.*:en");
+
+        Assert.Equal("*", spec.Schema.ToString());
+        Assert.Equal("*", spec.Field.ToString());
+        Assert.Equal("en", spec.Language.ToString());
+        Assert.Equal("*.*:en", spec.ToString());
+    }
+
     [Theory]
     [InlineData("schema.field:en", "schema", "field", "en", true)]
     [InlineData("schema.*:en", "schema", "field", "en", true)]

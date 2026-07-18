@@ -174,6 +174,13 @@ $ veeling export Schema1.Field1:en
 Schema1.Field1:en: Sample value
 ```
 
+You can also export everything without a selector:
+
+```text
+$ veeling export
+Schema1.Field1:en: Sample value
+```
+
 Now, we can check the status of our project:
 
 ```text
@@ -196,6 +203,13 @@ Let's fetch the values:
 $ veeling export Schema1.*:*
 Schema1.Field1:en: Sample value
 Schema1.Field1:fi: Esimerkkiarvo
+```
+
+You can scope exports by language too:
+
+```text
+$ veeling export *.*:en
+Schema1.Field1:en: Sample value
 ```
 
 Finally, let's publish the project:

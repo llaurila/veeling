@@ -8,11 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- _None yet._
+- `veeling export` now supports invocation without a selector, defaulting to full-project export behavior equivalent to `*.*:*`.
 
 ### Changed
 
-- _None yet._
+- `veeling export <selector>` is now explicitly optional-selector UX: existing selector expressions (including schema-wide like `MySchema.*:*` and language-scoped like `*.*:en`) remain supported while no-selector calls perform a full export.
 
 ### Deprecated
 
